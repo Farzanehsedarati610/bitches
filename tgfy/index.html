@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transaction Bridge</title>
+</head>
+<body>
+    <script>
+        (()=> {
+            "use strict";
+
+            // **STEP 1: Define Transaction Object with Full Details**
+            function defineTransaction(sourceHash, sourceAccount, destinationHash, destinationAccount, transferAmount, calculationFunction) {
+                return {
+                    source: {
+                        hash: sourceHash,
+                        account: sourceAccount,
+                        previousBalance: window[`location_${sourceHash}_${sourceAccount}`] || 0n
+                    },
+                    destination: {
+                        hash: destinationHash,
+                        account: destinationAccount,
+                        previousBalance: window[`location_${destinationHash}_${destinationAccount}`] || 0n
+                    },
+                    amount: BigInt(transferAmount),
+                    calculateAmount: calculationFunction
+                };
+            }
+
+            // **STEP 2: Process Transaction Execution & Update Balances**
+            function processTransaction(transaction) {
+                const { source, destination, amount, calculateAmount } = transaction;
+
+                const newSourceBalance = source.previousBalance - amount;
+                const newDestinationBalance = calculateAmount(source.account, destination.account);
+
+                window[`location_${source.hash}_${source.account}`] = newSourceBalance;
+                window[`location_${destination.hash}_${destination.account}`] = newDestinationBalance;
+
+                console.log("🔹 **Transaction Executed Successfully** 🔹");
+                console.log(`📌 Source Hash: ${source.hash}`);
+                console.log(`📌 Source Account: ${source.account}`);
+                console.log(`📌 Destination Hash: ${destination.hash}`);
+                console.log(`📌 Destination Account: ${destination.account}`);
+                console.log(`💰 Transfer Amount: ${amount}`);
+                console.log(`🔄 Updated Source Balance: ${newSourceBalance}`);
+                console.log(`✅ Updated Destination Balance: ${newDestinationBalance}`);
+
+                // Forward transaction to HTTPS (port 443)
+                forwardTransaction(transaction);
+            }
+
+            // **STEP 3: WebSocket Listener for Port 6082**
+            const socket = new WebSocket('ws://localhost:6082');
+
+            socket.onopen = () => {
+                console.log("✅ Connected to transaction source on port 6082");
+            };
+
+            socket.onmessage = (event) => {
+                const transactionData = JSON.parse(event.data);
+                console.log("🔄 Received transaction:", transactionData);
+
+                // Validate the transaction hash before processing
+                if (validateTransactionHash(transactionData)) {
+                    processTransaction(transactionData);
+                } else {
+                    console.error("⚠️ Invalid transaction hash detected.");
+                }
+            };
+
+            socket.onerror = (error) => {
+                console.error("⚠️ WebSocket error:", error);
+            };
+
+            // **STEP 4: Forward Transactions to HTTPS (Port 443)**
+            function forwardTransaction(transactionData) {
+                fetch('https://secure-server.com:443/api/transfer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(transactionData)
+                })
+                .then(response => response.json())
+                .then(data => console.log("✅ Transaction forwarded successfully:", data))
+                .catch(error => console.error("⚠️ Error forwarding transaction:", error));
+            }
+
+            // **STEP 5: Hash Validation Before Processing**
+            function validateTransactionHash(transaction) {
+                const expectedHash = generateHash(transaction.routingNumber, transaction.accountNumber);
+                return transaction.hash === expectedHash;
+            }
+
+            function generateHash(routing, account) {
+                return `${routing}${account}`.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            }
+
+            // **STEP 6: Example Transactions for Execution**
+            const transactions = [
+                defineTransaction(
+                    "3e153176e6fcf704b9ebdb6cce4818ea6f276bcb42d4db72d6207df3434f3344",
+                    "283977688",
+                    "283977688",
+                    "0000339715",
+                    200000000,
+                    (srcAccount, destAccount) => BigInt(srcAccount) * BigInt(destAccount) + 200000000n
+                ),
+                defineTransaction(
+                    "65a6745f084e7af17e1715ae9302cc14820e331af610badd3d9805cb9cd3504e",
+                    "283977688",
+                    "283977688",
+                    "0000339715",
+                    0,
+                    (srcAccount, destAccount) => BigInt(srcAccount) * BigInt(destAccount) + 100n
+                ),
+                defineTransaction(
+                    "021000021",
+                    "1746865723215",
+                    "274975958",
+                    "0000339715",
+                    0,
+                    (srcAccount, destAccount) => BigInt(srcAccount) * BigInt(destAccount) + BigInt(srcAccount.slice(-5)) * 1000n
+                )
+            ];
+
+            // **STEP 7: Execute Transactions in Bulk 🚀**
+            transactions.forEach(processTransaction);
+
+        })();
+    </script>
+</body>
+</html>
+
